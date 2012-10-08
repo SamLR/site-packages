@@ -48,40 +48,6 @@ def make_hist(name, xmin, xmax, xtitle, ytitle, description=None):
     res.GetYaxis().SetTitle(ytitle)
     return res
 
-def make_hist(name, description="", mins=(0,), maxs=(100,), titles=None, bins=None):
-    """
-    Make a ROOT histogram with the specified attributes.
-    
-    Mins & maxes define the range for each binned axis and are used to 
-    determine the sort of histogram to use. If 3 mins & maxes are supplied a 
-    TH3F is created, 2 and TH2F is created 1 min & 1 max will generate a TH1F.
-    
-    Titles and bins (if supplied) are applied, in order, to the appropriate 
-    axis i.e. the first is applied to the x-axis, the second to the y 
-    and the third to the z.
-    
-    Supplying an incorrect number of bins will raise a ROOTException.
-    """
-    if len(mins) > 3:
-        raise ROOTException("Maximum histogram dimensions: 3")
-    elif len(mins) != len(maxs):
-        raise ROOTException("Unable to determine dimension of histogram")
-    elif bins and (len(bins) != len(maxs)):
-        raise ROOTException("Incorrect number of bins supplied")
-                            
-    description = description if description else name
-    bins = bins if bins else [(i-j) for i in maxs for j in mins]
-    
-    if len(mins) == 1:
-        hist = TH1F(name, description, bins[0], mins[0], maxs[0])
-    elif len(mins) == 2:
-        hist = TH2F(name, description, bins[0], mins[0], maxs[0],\
-                                       bins[1], mins[1], maxs[1])
-    elif len(mins) == 3:
-        hist = TH3F(name, description, bins[0], mins[0], maxs[0],\
-                                       bins[1], mins[1], maxs[1],\
-                                       bins[2], mins[2], maxs[2])
-    
 
 def rebin_nbins(hist, n_bins, new_name=''):
     """
