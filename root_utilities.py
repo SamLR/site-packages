@@ -8,7 +8,7 @@ Created by Sam Cook on 2012-07-25.
 Generally useful functions for dealing with ROOT objects
 """
 
-from ROOT import gROOT, TFile, TTree, TBranch, TCanvas, TH1F, TH2F, TH3F
+from ROOT import gROOT, TFile, TTree, TBranch, TCanvas, TH1F
 
 class ROOTException(Exception):
     pass
