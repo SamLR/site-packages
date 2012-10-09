@@ -88,7 +88,7 @@ def traverse(obj, pmode=False, level=0):
     """
     if hasattr(obj, 'keys'):
         for val in obj:
-            yield val if not pmode else ('{'+val, level)
+            yield val if not pmode else ('{'+str(val), level)
             level += 1
             for subval in traverse(obj[val], pmode, level):
                 yield subval
