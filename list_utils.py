@@ -42,6 +42,41 @@ def test_add_as_sub_dict():
         print e
 
 
+
+def create_sub_dicts_from_keys(dict, keysplit_function):
+    """
+    Use the keysplit_function to extract (key, sub-key) pairs 
+    and return a copy of the dictionary split with that structure
+    
+    Example:
+    {'a_1':1, 'a_2':2, 'b_1':3, 'b_2':4}
+            -> {'a':{'1':1,'2':2}, 'b':{'1':3,'2':4}}
+    keysplit_function = lambda x: (x.split('_')[0], x.split('_')[1])
+    """
+    res = {}
+    for initial_key in dict:
+        key, sub_key = keysplit_function(initial_key)
+        value = dict[initial_key]
+        if key in res:
+            res[key][sub_key] = value
+        else:
+            res[key] = {sub_key:value}
+    return res
+    
+
+
+def test_create_sub_dicts_from_keys():
+    test = {'a_1':1, 'a_2':2, 'b_1':3, 'b_2':4}
+    expect = {'a':{'1':1,'2':2}, 'b':{'1':3,'2':4}}
+    print 'testing create_sub_dicts_from_keys'
+    keysplit_func = lambda x: (x.split('_')[0], x.split('_')[1])
+    res = create_sub_dicts_from_keys(test, keysplit_func)
+    print 'expect: ', expect
+    print 'got:    ', res
+    print 'passed' if expect==res else 'failed'
+    print 'create_sub_dicts_from_keys passed all tests \n'
+
+
 def traverse(obj, pmode=False, level=0):
     """
     Traverses an object yielding its contents. Strings are not traversed.
@@ -108,7 +143,9 @@ def main():
     test_traverse()
     print '\ntest_add_as_sub_dict()'
     test_add_as_sub_dict()
-    print "\n All tests complete"
+    print '\ntest_create_sub_dicts_from_keys()'
+    test_create_sub_dicts_from_keys()
+    print "\nAll tests finished"
 
 
 if __name__ == '__main__':
