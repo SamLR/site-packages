@@ -42,7 +42,6 @@ def test_add_as_sub_dict():
         print e
 
 
-
 def create_sub_dicts_from_keys(dict, keysplit_function):
     """
     Use the keysplit_function to extract (key, sub-key) pairs 

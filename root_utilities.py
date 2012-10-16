@@ -18,6 +18,22 @@ from sys import maxint
 class ROOTException(Exception):
     pass
 
+
+class Branch(object):
+    """Represents a branch of a TTree, but also local stores the associated data"""
+    # TODO make this an iterable object so we can easily loop over all entries
+    def __init__(self, branch_ptr, data_object):
+        self.ptr = branch_ptr
+        self.data = data_object
+    
+    def __getitem__(self, key):
+        return self.data.__getattribute__(key)
+    
+    def __getattr__(self, name):
+        return self.ptr.__getattribute__(name)
+    
+
+
 def get_branch(tree, branch_name, data_class):
     """
     Gets a branch from a ROOT TTree and returns it as a useful object
@@ -241,8 +257,7 @@ def get_min_amongst_hists(hists):
                                 lambda prev, this_val: prev > this_val)
 
 
-def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False,
-                        pad_preffix='', legend_preffix=''):
+def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, pad_preffix='', legend_preffix=''):
     """
     Draws given hists to a canvas. Assumes hists is either a dictionary
     of 
@@ -266,9 +281,11 @@ def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False,
     else:
         get_canvas_with_hists.canvas_id += 1
     canvas_name = canvas_name + str(get_canvas_with_hists.canvas_id)
+    
     # figure out how many pads the canvas needs to be divided into
     x,y = get_quantised_width_height(len(hists))
     canvas = make_canvas(canvas_name, n_x=x, n_y=y, maximised=True)
+    canvas.cd()
     canvas.save_legends = {}
     for pad_id, (pad_name, obj_to_draw) in enumerate(hists.items(), 1):
         pad = canvas.cd(pad_id)
@@ -280,6 +297,7 @@ def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False,
             # collection of hists, to be drawn on the same pad
             axis_max = get_max_amongst_hists(obj_to_draw)
             if set_y_min: axis_min = get_min_amongst_hists(obj_to_draw)
+            # TODO add a method to figure out width of legend
             legend = TLegend(0.6, 0.9-0.04*len(obj_to_draw),0.8,0.9)
             legend.SetFillColor(0)
             first_hist = None
