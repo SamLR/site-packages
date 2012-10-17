@@ -271,7 +271,7 @@ def get_min_amongst_hists(hists):
                                 lambda prev, this_val: prev > this_val)
 
 
-def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, sort_args=[]):
+def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_zero=False, sort_args=[]):
     """
     Draws given histograms to a canvas. Assumes hists is either a dictionary
     of 
@@ -287,8 +287,8 @@ def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, 
     canvas_name is a prefix to use for the canvas name (a unique ID will 
     be added)
     
-    set_y_min toggles setting the minimum y value to the minimum value
-    of all the histograms (instead of 0, as is the default).
+    set_y_zero toggles between setting the minimum y axis value to 0 or the 
+    smallest value amongst the histograms
     
     sort_args is a list of arguments to be used in sorting the dictionary 
     keys. If separate sorts are required for sub-dictionaries then they 
@@ -316,18 +316,15 @@ def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, 
             # collection of hists, to be drawn on the same pad
             sub_keys = get_sorted_dict_keys(obj_to_draw, *sort_args[3:])
             # figure out what the range should be
-            axis_max = get_max_amongst_hists(obj_to_draw)
-            if set_y_min: axis_min = get_min_amongst_hists(obj_to_draw)
-            
+            axis_max = 1.1*get_max_amongst_hists(obj_to_draw)
+            axis_min = 0.9*get_min_amongst_hists(obj_to_draw) if not set_y_zero else 0
             # t_draw_opt also is used to determine if this is the first hist
             t_draw_opt = draw_opt
             for colour_id, hist_name in enumerate(sub_keys, 1):
                 hist = obj_to_draw[hist_name]
-                
                 # use t_draw_opt to determine if this is a virgin pad
-                if t_draw_opt == draw_opt:
-                    hist.SetMaximum(1.1*axis_max)
-                    if set_y_min: hist.SetMinimum(0.9*axis_min)
+                hist.SetMaximum(axis_max)
+                hist.SetMinimum(axis_min)
                     
                 hist.SetLineColor(colour_id)
                 hist.Draw(t_draw_opt)
