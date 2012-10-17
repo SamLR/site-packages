@@ -42,7 +42,29 @@ def test_get_quantised_width_height():
             print "passed"
     print "get_quantised_width_height passed all tests"
 
+
+def increment_counter_attribute(obj, attribute_name="counter", init_val=0):
+    """
+    Creates an attribute on the object that acts as a static counter
+    """
+    if hasattr(obj, attribute_name): 
+        init_val = getattr(obj, attribute_name) + 1
+    setattr(obj, attribute_name, init_val)
+
+
+def test_increment_counter_attribute():
+    def t():
+        increment_counter_attribute(t)
+        print t.counter
+    
+    t()
+    t()
+    print 'passed' if t.counter == 1 else 'failed'
+    print 'increment_counter_attribute passed!'
+
+
 if __name__=='__main__':
     test_get_quantised_width_height()
     print "\n This is wait_to_quit:"
+    test_increment_counter_attribute()
     wait_to_quit()
