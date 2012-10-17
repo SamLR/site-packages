@@ -137,6 +137,33 @@ def test_traverse():
     printTraverse(test1,'-')
 
 
+def get_sorted_dict_keys(dict, *sort_args, **sort_kwargs):
+    """
+    Get a list of dictionary keys sorted according to sort_(k)args
+    """
+    # this is a really silly function but I'm doing it all the time
+    res = dict.keys()
+    res.sort(*sort_args, **sort_kwargs)
+    return res
+
+
+def test_get_sorted_dict_keys():
+    d = {1:1, 3:3, 4:4, 5:5}
+    expect = [1,3,4,5]
+    print "get_sorted_dict_keys(",d,")"
+    print expect
+    res = get_sorted_dict_keys(d)
+    print 'got: ', res
+    print 'passed' if expect==res else 'failed'
+    expect2 = expect.reverse()
+    print "get_sorted_dict_keys(",d,",  **{'cmp':None, 'key':None, 'reverse':True})"
+    print expect
+    res = get_sorted_dict_keys(d, **{'cmp':None, 'key':None, 'reverse':True})
+    print 'got: ', res
+    print 'passed' if expect==res else 'failed'
+    print 'get_sorted_dict_keys passed all tests'
+
+
 def main():
     print 'test_traverse()'
     test_traverse()
@@ -144,6 +171,8 @@ def main():
     test_add_as_sub_dict()
     print '\ntest_create_sub_dicts_from_keys()'
     test_create_sub_dicts_from_keys()
+    print '\ntest_get_sorted_dict_keys'
+    test_get_sorted_dict_keys()
     print "\nAll tests finished"
 
 
