@@ -11,7 +11,10 @@ Generally useful functions for dealing with ROOT objects
 from ROOT import gROOT, TFile, TTree, TBranch, TCanvas, TLegend, \
                  TH1D, TH2D, TH3D
 
-from general_utilities import get_quantised_width_height
+from general_utilities import get_quantised_width_height, \
+                                increment_counter_attribute
+
+from list_utilities import get_sorted_dict_keys
 
 from sys import maxint
 
@@ -102,7 +105,7 @@ def make_hist(name, mins=0, maxs=100, titles=None, bins=None, dim=1, des=None):
     elif dim == 3:
         res = TH3D(*args)
         
-        
+    # Checking titles exists stops len raising an error if it doesn't 
     if titles and len(titles) >= 1: res.GetXaxis().SetTitle(titles[0])
     if titles and len(titles) >= 2: res.GetYaxis().SetTitle(titles[1])
     if titles and len(titles) >= 3: res.GetZaxis().SetTitle(titles[2])
@@ -149,8 +152,9 @@ def rebin_nbins(hist, n_bins, new_name=''):
     then n_bins will be created and the excess (at the upper bin) will be 
     added to the overflow bin
     """
+    # TODO make this aware of other dimensions
     if n_bins == 0:
-        return hist
+        return hist 
     else:
         xmin = hist.GetXaxis().GetXmin()
         xmax = hist.GetXaxis().GetXmax()
@@ -162,75 +166,85 @@ def rebin_nbins(hist, n_bins, new_name=''):
 
 
 def rebin_bin_width(hist, bin_width, new_name=''):
+    # TODO make this aware of other dimensions
     if bin_width == 0: 
         return hist
     else:
         return hist.Rebin(bin_width, new_name)
 
 
-def make_canvas(name, n_x=0, n_y=0, maximised=False):
-    name = str(name)
-    canvas = TCanvas(name, name,1436,856) if maximised else TCanvas(name,name) 
+def make_canvas(name, n_x=0, n_y=0, resize=False, _w=1436, _h=856):
+    """
+    Make a named canvas, optionally divide it into n_x and n_y pieces.
+    If resize is true the canvas is made with specified width (_w) and
+    height (_h), the default will maximise the canvas on a 1440x900 screen
+    """
+    name = str(name) # make sure we have a string
+    canvas = TCanvas(name, name,_w,_h) if resize else TCanvas(name,name) 
     if n_x or n_y: canvas.Divide(n_x, n_y)
     return canvas
 
 
-def get_dict_of_keys_and_tfile(filename, keyfunc=lambda x:x):
+def get_contents_of_tfile_as_dict(folder, key_func=lambda x:x.GetName()):
     """
-    Opens the named TFile and creates a dictionary out of the 
-    objects saved with in it. 
+    Opens the named TFile and returns its contents as a dictionary.
     
-    The returned dictionary is formed of object:object_name pairs
+    The dictionary's keys are determined by keyfunc (by default the 
+    object's ROOT name).
     
-    The pointer to the file is also returned to keep it in scope.
-    
-    Keyfunc is a function applied to the object's name to create 
-    the dictionary key
+    To maintain scope on the objects the TFile is also returned.
     """
-    # TODO Look at creating a recursive version of this
-    # i.e. if the object has crawlable sub structure (trees, dirs etc)
-    # write it into a dict format
     in_file = TFile(filename, "READ")
     res = {}
     for key in in_file.GetListOfKeys():
-        # name looks like "Muon_momentum_with_Aluminium_0.5mm"
         obj = key.ReadObj()
-        key = keyfunc(obj.GetName())
-        res[key] = obj
+        dict_key = key_func(obj)
+        res[dict_key] = obj
     return res, in_tfile
+    
+    # Would have tried making a recurive version of this but there is no 
+    # clear way to crawl a ROOT structure. This is due to there being
+    # two base folder types: TFolder and TDirectory which are for 
+    # structures in memory and files respectively. Both return true to 
+    # 'isFolder()' but only TDirectory implments 'GetListOfKeys()', 
+    # TFolder has no analogous method. In theory 'isA' should allow
+    # direct testing but it is not clear how it is implemented.
 
 
-def print_square_matrix(matrix):
+def print_square_matrix(matrix, number_fmt="% 5.2e"):
+    """
+    Prints a square matrix (anything that has a 'GetNcols' method).
+    
+    Number format specifies how each value should be printed
+    """
     dimension = matrix.GetNcols()
-    fmt_string = "% 5.2e " * dimension 
+    fmt_string = (number_fmt + ' ') * dimension 
     for i in range (dimension):
         row = tuple([matrix[i][n] for n in range(dimension)])
         print fmt_string % row
 
 
-def set_param_and_error(param_number, param, error, function):
-    function.SetParameter(param_number, param)
-    function.SetParError (param_number, error)
-
-
-def get_param_and_error(param_number, function):
-    return function.GetParameter(param_number), function.GetParError(param_number)
-
-
 def set_bin_val_er_label(hist, bin, val, er, bin_name):
+    """
+    Set the bin value, error and label.
+    
+    NB bin indexing starts from 1 (bin 0 is underflow).
+    """
     hist.SetBinContent(bin, float(val))
     hist.SetBinError(bin, float(er))
     hist.GetXaxis().SetBinLabel(bin, str(bin_name))
 
 
-def __get_x_amongst_hists(hists, initial_val, x_func, comp_func):
+def __find_x_in_hists(hists, initial_res, x_func, comp_func):
     """
-    Helper function; apply x_func to all histograms in hists
-    if comp_func(previous_val, returned_val) is true
-    then returned_val set.
+    Helper function; apply x_func to all histograms in hists and
+    then pass the result and return value to comp_func. If
+    comp_func is true then the return value is updated.
+    
+    initial_res is the initial starting value for comp_func.
     """
     if hasattr(hists, 'keys'): hists = hists.values()
-    res = initial_val
+    res = initial_res
     for hist in hists:
         val = x_func(hist)
         if comp_func(res, val):
@@ -242,7 +256,7 @@ def get_max_amongst_hists(hists):
     """
     Find the maximum value amongst hists
     """
-    return __get_x_amongst_hists(hists, (-maxint - 1), 
+    return __find_x_in_hists(hists, (-maxint - 1), 
                                 lambda hist: hist.GetMaximum(),
                                 lambda prev, this_val: prev < this_val)
         
@@ -252,71 +266,74 @@ def get_min_amongst_hists(hists):
     """
     Find the minimum value amongst hists
     """
-    return __get_x_amongst_hists(hists, maxint,
+    return __find_x_in_hists(hists, maxint,
                                 lambda hist: hist.GetMinimum(),
                                 lambda prev, this_val: prev > this_val)
 
 
-def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, pad_preffix='', legend_preffix=''):
+def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_min=False, sort_args=[]):
     """
-    Draws given hists to a canvas. Assumes hists is either a dictionary
+    Draws given histograms to a canvas. Assumes hists is either a dictionary
     of 
-        <hist title>:<histogram> 
+        <key>:<histogram> 
     pairs or a dictionary of 
-        <hist title>:{<sub histogram title>:<sub histograms>} 
-    pairs. 
-    For either a single canvas will be divided into pads (1 per pair), 
-    in the later case the sub-histograms will be all drawn to the same pad
-    and the sub histogram title will be used in the appropriate legend.
+        <key>:{<sub-key>:<sub histograms>} 
+    pairs. In either case a single canvas will be divided into pads (1 per 
+    key), and the histogram(s) associated with that key drawn to that pad.
     
-    draw_opt are any ROOT drawing options to be used.
+    draw_opt are any ROOT drawing options to be used (excluding 'SAME'
+    which is automatically applied for sub histograms on a pad).
+    
     canvas_name is a prefix to use for the canvas name (a unique ID will 
     be added)
-    set_y_min toggles setting the minimum y value, useful for small ranges
-    of values far from the origin.
+    
+    set_y_min toggles setting the minimum y value to the minimum value
+    of all the histograms (instead of 0, as is the default).
+    
+    sort_args is a list of arguments to be used in sorting the dictionary 
+    keys. If separate sorts are required for sub-dictionaries then they 
+    should be added to this list from position 3 otherwise the same
+    sort will be used for both.
     """
     # use a function attribute to make all canvases unique
-    if not hasattr(get_canvas_with_hists, "canvas_id"):
-        get_canvas_with_hists.canvas_id = 0
-    else:
-        get_canvas_with_hists.canvas_id += 1
+    increment_counter_attribute(get_canvas_with_hists, 'canvas_id')
     canvas_name = canvas_name + str(get_canvas_with_hists.canvas_id)
     
     # figure out how many pads the canvas needs to be divided into
     x,y = get_quantised_width_height(len(hists))
-    canvas = make_canvas(canvas_name, n_x=x, n_y=y, maximised=True)
-    canvas.cd()
-    canvas.save_legends = {}
-    for pad_id, (pad_name, obj_to_draw) in enumerate(hists.items(), 1):
-        pad = canvas.cd(pad_id)
+    canvas = make_canvas(canvas_name, n_x=x, n_y=y, resize=True)
+    # make sure focus is on the correct canvas
+    canvas.cd() 
+    
+    main_keys = get_sorted_dict_keys(hists, *sort_args[:3])
+    for pad_id, pad_name in enumerate(main_keys, 1):
+        canvas.cd(pad_id)        
+        obj_to_draw = hists[pad_name]
         if not hasattr(obj_to_draw, 'keys'):
-            # single hist draw it and move on
-            obj_to_draw.SetTitle(pad_name)
+            # draw it an move on
             obj_to_draw.Draw(draw_opt)
         else:
             # collection of hists, to be drawn on the same pad
+            sub_keys = get_sorted_dict_keys(obj_to_draw, *sort_args[3:])
+            # figure out what the range should be
             axis_max = get_max_amongst_hists(obj_to_draw)
             if set_y_min: axis_min = get_min_amongst_hists(obj_to_draw)
-            # TODO add a method to figure out width of legend
-            legend = TLegend(0.6, 0.9-0.04*len(obj_to_draw),0.8,0.9)
-            legend.SetFillColor(0)
-            first_hist = None
-            for colour_id, (hist_name, hist) in enumerate(obj_to_draw.items(),1):
-                if first_hist==None:
+            
+            # t_draw_opt also is used to determine if this is the first hist
+            t_draw_opt = draw_opt
+            for colour_id, hist_name in enumerate(sub_keys, 1):
+                hist = obj_to_draw[hist_name]
+                
+                # use t_draw_opt to determine if this is a virgin pad
+                if t_draw_opt == draw_opt:
                     hist.SetMaximum(1.1*axis_max)
                     if set_y_min: hist.SetMinimum(0.9*axis_min)
-                    hist.Draw(draw_opt)
-                    first_hist=hist
-                else:
-                    hist.SetLineColor(colour_id)
-                    hist.Draw(draw_opt+"SAME")
-                legend.AddEntry(hist, legend_preffix + hist_name)
-            first_hist.SetTitle(pad_preffix+str(pad_name)) 
-            legend.Draw()
-            # make sure that the legend objects stay in scope
-            # mmmmm smells like impending memory leak!
-            canvas.save_legends[pad_id] = legend
-            pad.Update()
+                    
+                hist.SetLineColor(colour_id)
+                hist.Draw(t_draw_opt)
+                t_draw_opt = "SAME"+draw_opt
+                
+    canvas.Update()
     return canvas
 
 
