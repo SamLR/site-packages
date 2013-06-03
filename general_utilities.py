@@ -1,5 +1,26 @@
 from math import floor, sqrt
 
+class EntryLogger(object):
+    """Logs entries to a function"""
+    enabled = True
+    verbose_args = False
+    def __init__(self, f):
+      self.func = f
+  
+    def __call__(self, *args, **kwargs):
+      if EntryLogger.enabled: 
+        print "Entering: {}".format(self.func.__name__)
+        if EntryLogger.verbose_args:
+          print "Args:\n\t", args
+          print "Kwargs:\n\t", kwargs
+          
+        res =  self.func(*args, **kwargs)
+        print "Exiting {}".format(self.func.__name__)
+      else:
+        res =  self.func(*args, **kwargs)
+      return res
+
+@EntryLogger
 def wait_to_quit():
     print "Press ctrl+C to stop"
     try:
