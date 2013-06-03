@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-utilities.py
+root_utilities.py
 
 Created by Sam Cook on 2012-07-25.
 
@@ -9,10 +9,11 @@ Generally useful functions for dealing with ROOT objects
 """
 
 from ROOT import gROOT, TFile, TTree, TBranch, TCanvas, TLegend, \
-                 TH1D, TH2D, TH3D
+                 TH1D, TH2D, TH3D, TF1
 
 from general_utilities import get_quantised_width_height, \
                                 increment_counter_attribute
+from ValueWithError import ValueWithError
 
 from list_utilities import get_sorted_dict_keys
 
@@ -22,48 +23,7 @@ class ROOTException(Exception):
     pass
 
 
-class Branch(object):
-    """Represents a branch of a TTree, but also local stores the associated data"""
-    # TODO make this an iterable object so we can easily loop over all entries
-    def __init__(self, branch_ptr, data_object):
-        self.ptr = branch_ptr
-        self.data = data_object
-    
-    def __getitem__(self, key):
-        return self.data.__getattribute__(key)
-    
-    def __getattr__(self, name):
-        return self.ptr.__getattribute__(name)
-    
-
-
-def get_branch(tree, branch_name, data_class):
-    """
-    Gets a branch from a ROOT TTree and returns it as a useful object
-    data_class must be a callable object that ROOT can write into
-    """
-    branch_ptr = tree.GetBranch(branch_name)
-    branch_data = data_class()
-    branch_ptr.SetAddress(branch_data)
-    return Branch(branch_ptr, branch_data)
-
-
-def get_struct(struct_fmt, struct_name):
-    """
-    Imports a named C struct with members given in struct comp at global scope.
-    
-    struct_fmt should be a string containing valid C defining the member
-    variables of the struct all lines should end with a ';'
-    """
-    struct = "struct %s{%s};"%(struct_name, struct_fmt)
-    # create the struct in CINT
-    gROOT.ProcessLine(struct)
-    # because we don't know the name of the struct we need to be able to 
-    # access the entire ROOT module and use getattr to extract it dynamically
-    tmp = __import__("ROOT")
-    return tmp.__getattr__(struct_name)
-    
-
+  
 
 def make_hist(name, mins=0, maxs=100, titles=None, bins=None, dim=1, des=None):
     """
@@ -104,7 +64,6 @@ def make_hist(name, mins=0, maxs=100, titles=None, bins=None, dim=1, des=None):
         res = TH2D(*args)
     elif dim == 3:
         res = TH3D(*args)
-        
     # Checking titles exists stops len raising an error if it doesn't 
     if titles and len(titles) >= 1: res.GetXaxis().SetTitle(titles[0])
     if titles and len(titles) >= 2: res.GetYaxis().SetTitle(titles[1])
@@ -185,155 +144,20 @@ def make_canvas(name, n_x=0, n_y=0, resize=False, _w=1436, _h=856):
     return canvas
 
 
-def get_contents_of_tfile_as_dict(folder, key_func=lambda x:x.GetName()):
-    """
-    Opens the named TFile and returns its contents as a dictionary.
-    
-    The dictionary's keys are determined by keyfunc (by default the 
-    object's ROOT name).
-    
-    To maintain scope on the objects the TFile is also returned.
-    """
-    in_file = TFile(filename, "READ")
-    res = {}
-    for key in in_file.GetListOfKeys():
-        obj = key.ReadObj()
-        dict_key = key_func(obj)
-        res[dict_key] = obj
-    return res, in_tfile
-    
-    # Would have tried making a recurive version of this but there is no 
-    # clear way to crawl a ROOT structure. This is due to there being
-    # two base folder types: TFolder and TDirectory which are for 
-    # structures in memory and files respectively. Both return true to 
-    # 'isFolder()' but only TDirectory implments 'GetListOfKeys()', 
-    # TFolder has no analogous method. In theory 'isA' should allow
-    # direct testing but it is not clear how it is implemented.
-
-
-def print_square_matrix(matrix, number_fmt="% 5.2e"):
-    """
-    Prints a square matrix (anything that has a 'GetNcols' method).
-    
-    Number format specifies how each value should be printed
-    """
-    dimension = matrix.GetNcols()
-    fmt_string = (number_fmt + ' ') * dimension 
-    for i in range (dimension):
-        row = tuple([matrix[i][n] for n in range(dimension)])
-        print fmt_string % row
-
-
-def set_bin_val_er_label(hist, bin, val, er, bin_name):
-    """
-    Set the bin value, error and label.
-    
-    NB bin indexing starts from 1 (bin 0 is underflow).
-    """
-    hist.SetBinContent(bin, float(val))
-    hist.SetBinError(bin, float(er))
-    hist.GetXaxis().SetBinLabel(bin, str(bin_name))
-
-
-def __find_x_in_hists(hists, initial_res, x_func, comp_func):
-    """
-    Helper function; apply x_func to all histograms in hists and
-    then pass the result and return value to comp_func. If
-    comp_func is true then the return value is updated.
-    
-    initial_res is the initial starting value for comp_func.
-    """
-    if hasattr(hists, 'keys'): hists = hists.values()
-    res = initial_res
-    for hist in hists:
-        val = x_func(hist)
-        if comp_func(res, val):
-            res = val
-    return res
-
-
-def get_max_amongst_hists(hists):
-    """
-    Find the maximum value amongst hists
-    """
-    return __find_x_in_hists(hists, (-maxint - 1), 
-                                lambda hist: hist.GetMaximum(),
-                                lambda prev, this_val: prev < this_val)
-        
-
-
-def get_min_amongst_hists(hists):
-    """
-    Find the minimum value amongst hists
-    """
-    return __find_x_in_hists(hists, maxint,
-                                lambda hist: hist.GetMinimum(),
-                                lambda prev, this_val: prev > this_val)
-
-
-def get_canvas_with_hists(hists, draw_opt='', canvas_name='c', set_y_zero=False, sort_args=[]):
-    """
-    Draws given histograms to a canvas. Assumes hists is either a dictionary
-    of 
-        <key>:<histogram> 
-    pairs or a dictionary of 
-        <key>:{<sub-key>:<sub histograms>} 
-    pairs. In either case a single canvas will be divided into pads (1 per 
-    key), and the histogram(s) associated with that key drawn to that pad.
-    
-    draw_opt are any ROOT drawing options to be used (excluding 'SAME'
-    which is automatically applied for sub histograms on a pad).
-    
-    canvas_name is a prefix to use for the canvas name (a unique ID will 
-    be added)
-    
-    set_y_zero toggles between setting the minimum y axis value to 0 or the 
-    smallest value amongst the histograms
-    
-    sort_args is a list of arguments to be used in sorting the dictionary 
-    keys. If separate sorts are required for sub-dictionaries then they 
-    should be added to this list from position 3 otherwise the same
-    sort will be used for both.
-    """
-    # use a function attribute to make all canvases unique
-    increment_counter_attribute(get_canvas_with_hists, 'canvas_id')
-    canvas_name = canvas_name + str(get_canvas_with_hists.canvas_id)
-    
-    # figure out how many pads the canvas needs to be divided into
-    x,y = get_quantised_width_height(len(hists))
-    canvas = make_canvas(canvas_name, n_x=x, n_y=y, resize=True)
-    # make sure focus is on the correct canvas
-    canvas.cd() 
-    
-    main_keys = get_sorted_dict_keys(hists, *sort_args[:3])
-    for pad_id, pad_name in enumerate(main_keys, 1):
-        canvas.cd(pad_id)        
-        obj_to_draw = hists[pad_name]
-        if not hasattr(obj_to_draw, 'keys'):
-            # draw it an move on
-            obj_to_draw.Draw(draw_opt)
-        else:
-            # collection of hists, to be drawn on the same pad
-            sub_keys = get_sorted_dict_keys(obj_to_draw, *sort_args[3:])
-            # figure out what the range should be
-            axis_max = 1.1*get_max_amongst_hists(obj_to_draw)
-            axis_min = 0.9*get_min_amongst_hists(obj_to_draw) if not set_y_zero else 0
-            # t_draw_opt also is used to determine if this is the first hist
-            t_draw_opt = draw_opt
-            for colour_id, hist_name in enumerate(sub_keys, 1):
-                hist = obj_to_draw[hist_name]
-                # use t_draw_opt to determine if this is a virgin pad
-                hist.SetMaximum(axis_max)
-                hist.SetMinimum(axis_min)
-                    
-                hist.SetLineColor(colour_id)
-                hist.Draw(t_draw_opt)
-                t_draw_opt = "SAME"+draw_opt
-                
-    canvas.Update()
-    return canvas
-
-
+def get_tree_from_file(treename, filename):
+  """
+  Returns the requested tree from the file.
+  
+  To avoid loss of scope on the file it is attached as an 
+  attribute of the tree (.file), along with the filename 
+  (.filename)
+  """
+  file = TFile(filename,"READ")
+  tree = file.Get(treename)
+  tree.file = file
+  tree.filename = filename
+  return tree
+  
 if __name__ == '__main__':
     test_make_hist()
 
